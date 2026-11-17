@@ -90,8 +90,7 @@ def pretty(name: str) -> str:
 st.title("🎓 AI Powered Student Performance Predictor")
 st.write(
     "Fill in a student's details to instantly predict their **final grade**. "
-    "Built for the M.Tech dissertation *Student Performance Prediction System*, "
-    "Brainware University. Compares Random Forest, KNN, SVM"
+    "Compares Random Forest, KNN, SVM"
     + (" and CNN." if CNN_AVAILABLE else " (add the CNN model to compare all 4).")
 )
 st.divider()
@@ -214,19 +213,20 @@ st.divider()
 
 model_list_label = "Random Forest vs KNN vs SVM vs CNN" if CNN_AVAILABLE else "Random Forest vs KNN vs SVM"
 with st.expander(f"📈 View model comparison ({model_list_label})"):
-    try:
+    if os.path.exists("Model_Comparison.csv"):
         comp = pd.read_csv("Model_Comparison.csv")
         st.dataframe(comp.style.highlight_max(axis=0, subset=["Accuracy", "Precision", "Recall", "F1 Score"],
                                                color="#d4f7dc"), use_container_width=True)
-        st.image("Model_Comparison_Grouped.png", use_container_width=True)
-    except FileNotFoundError:
-        st.write("Comparison file not found — run the training script to generate it.")
+        if os.path.exists("Model_Comparison_Grouped.png"):
+            st.image("Model_Comparison_Grouped.png", use_container_width=True)
+    else:
+        st.write("Comparison file not found — add Model_Comparison.csv to this folder.")
 
 with st.expander("🔍 View feature importance"):
-    try:
+    if os.path.exists("Feature_Importance.png"):
         st.image("Feature_Importance.png", use_container_width=True)
-    except FileNotFoundError:
-        st.write("Feature importance chart not found.")
+    else:
+        st.write("Feature importance chart not found — add Feature_Importance.png to this folder.")
 
 if CNN_AVAILABLE:
     with st.expander("🧠 View CNN training curves & confusion matrix"):
