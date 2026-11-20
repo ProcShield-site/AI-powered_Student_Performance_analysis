@@ -33,11 +33,22 @@ GRADE_COLORS = {
 st.markdown(
     """
     <style>
-    /* ---------- animated gradient page background ---------- */
-    .main {
-        background: linear-gradient(120deg, #eef6ff, #f3ecff, #e8fbf5, #eef6ff);
-        background-size: 300% 300%;
-        animation: bgShift 18s ease infinite;
+    /* ---------- animated, multi-colour pastel background ---------- */
+    [data-testid="stApp"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"],
+    .stApp {
+        background: linear-gradient(
+            125deg,
+            #e3f2fd 0%,
+            #f3e5f5 20%,
+            #fff3e0 40%,
+            #e8f5e9 60%,
+            #e0f7fa 80%,
+            #e3f2fd 100%
+        ) !important;
+        background-size: 400% 400% !important;
+        animation: bgShift 22s ease infinite;
     }
     @keyframes bgShift {
         0%   { background-position: 0% 50%; }
