@@ -14,10 +14,12 @@ SVM_PATH = "svm_model.pkl"
 # Page setup
 # ------------------------------------------------------------------
 st.set_page_config(
-    page_title="Student Performance Predictor",
+    page_title="GradeGenius AI",
     page_icon="🎓",
     layout="centered",
 )
+
+BANNER_PATH = "banner.png"
 
 # Colors used for each grade badge/chart
 GRADE_COLORS = {
@@ -31,22 +33,132 @@ GRADE_COLORS = {
 st.markdown(
     """
     <style>
-    .main { background-color: #fafafa; }
+    /* ---------- animated gradient page background ---------- */
+    .main {
+        background: linear-gradient(120deg, #eef6ff, #f3ecff, #e8fbf5, #eef6ff);
+        background-size: 300% 300%;
+        animation: bgShift 18s ease infinite;
+    }
+    @keyframes bgShift {
+        0%   { background-position: 0% 50%; }
+        50%  { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    /* ---------- floating, glowing banner image ---------- */
+    div[data-testid="stImage"] img {
+        border-radius: 20px;
+        box-shadow: 0 12px 30px rgba(80, 60, 200, 0.25);
+        animation: floatY 4s ease-in-out infinite;
+    }
+    @keyframes floatY {
+        0%, 100% { transform: translateY(0px); }
+        50%      { transform: translateY(-8px); }
+    }
+
+    /* ---------- gradient animated title ---------- */
+    .gg-title {
+        font-size: 44px;
+        font-weight: 900;
+        text-align: center;
+        margin-bottom: 0px;
+        background: linear-gradient(90deg, #6a11cb, #2575fc, #11cbbf, #6a11cb);
+        background-size: 300% auto;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: titleShine 6s linear infinite;
+    }
+    @keyframes titleShine {
+        0%   { background-position: 0% 50%; }
+        100% { background-position: 300% 50%; }
+    }
+    .gg-subtitle {
+        text-align: center;
+        font-size: 20px;
+        font-weight: 600;
+        color: #4b3f72;
+        margin-top: 4px;
+    }
+    .gg-tagline {
+        text-align: center;
+        font-size: 15px;
+        color: #6b6b85;
+        margin-top: 2px;
+        margin-bottom: 10px;
+    }
+
+    /* ---------- section headers with colored pill ---------- */
+    .gg-section {
+        display: inline-block;
+        padding: 6px 18px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6a11cb, #2575fc);
+        color: white !important;
+        font-weight: 700;
+        font-size: 18px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 14px rgba(37, 117, 252, 0.35);
+    }
+
+    /* ---------- glowing, pulsing, 3D-tilt grade badge ---------- */
     .grade-badge {
         display: inline-block;
         padding: 18px 38px;
-        border-radius: 14px;
-        font-size: 42px;
+        border-radius: 18px;
+        font-size: 46px;
         font-weight: 800;
         color: white;
         text-align: center;
+        box-shadow: 0 0 25px 4px var(--glow, rgba(52,152,219,0.6)), 0 10px 20px rgba(0,0,0,0.15);
+        animation: pulseGlow 2.2s ease-in-out infinite;
+        transition: transform 0.25s ease;
+        transform-style: preserve-3d;
     }
+    .grade-badge:hover {
+        transform: perspective(500px) rotateX(8deg) rotateY(-8deg) scale(1.05);
+    }
+    @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 18px 2px var(--glow, rgba(52,152,219,0.55)), 0 10px 20px rgba(0,0,0,0.15); }
+        50%      { box-shadow: 0 0 32px 8px var(--glow, rgba(52,152,219,0.85)), 0 10px 20px rgba(0,0,0,0.15); }
+    }
+
+    /* ---------- colorful 3D-hover cards ---------- */
     .metric-card {
         background: white;
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 14px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        box-shadow: 0 4px 14px rgba(0,0,0,0.10);
         text-align: center;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .metric-card:hover {
+        transform: perspective(600px) rotateX(4deg) translateY(-4px);
+        box-shadow: 0 14px 28px rgba(106, 17, 203, 0.25);
+    }
+
+    /* ---------- gradient, lifting predict button ---------- */
+    .stButton > button, .stFormSubmitButton > button {
+        background: linear-gradient(90deg, #6a11cb, #2575fc, #11cbbf);
+        background-size: 200% auto;
+        color: white !important;
+        font-weight: 700;
+        border: none;
+        border-radius: 999px;
+        box-shadow: 0 6px 18px rgba(37, 117, 252, 0.4);
+        transition: all 0.3s ease;
+    }
+    .stButton > button:hover, .stFormSubmitButton > button:hover {
+        background-position: right center;
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 10px 24px rgba(106, 17, 203, 0.5);
+    }
+
+    /* ---------- colorful expander accents ---------- */
+    div[data-testid="stExpander"] {
+        border-radius: 12px !important;
+        border-left: 5px solid #2575fc !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
     }
     </style>
     """,
@@ -84,14 +196,29 @@ def pretty(name: str) -> str:
     return name.replace("_", " ").title()
 
 
+def hex_to_rgba(hex_color: str, alpha: float = 0.6) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 # ------------------------------------------------------------------
 # Header
 # ------------------------------------------------------------------
-st.title("🎓 AI Powered Student Performance Predictor")
-st.write(
-    "Fill in a student's details to instantly predict their **final grade**. "
-    "Compares Random Forest, KNN, SVM"
+if os.path.exists(BANNER_PATH):
+    st.image(BANNER_PATH, use_container_width=True)
+
+st.markdown('<div class="gg-title">GradeGenius AI</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="gg-subtitle">Know Your Performance. Shape Your Future.</div>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<div class="gg-tagline">Fill in a student\'s details to instantly predict their final grade \u2014 '
+    "compares Random Forest, KNN, SVM"
     + (" and CNN." if CNN_AVAILABLE else " (add the CNN model to compare all 4).")
+    + "</div>",
+    unsafe_allow_html=True,
 )
 st.divider()
 
@@ -115,7 +242,7 @@ if not CNN_AVAILABLE:
 # Input form (built automatically from the training data)
 # ------------------------------------------------------------------
 with st.form("student_form"):
-    st.subheader("📋 Student Information")
+    st.markdown('<span class="gg-section">📋 Student Information</span>', unsafe_allow_html=True)
 
     left, right = st.columns(2)
     inputs = {}
@@ -166,14 +293,15 @@ if submitted:
 
     grade = encoders["final_grade"].inverse_transform([pred])[0]
     color = GRADE_COLORS.get(grade, "#3498db")
+    glow = hex_to_rgba(color, 0.65)
 
     st.divider()
-    st.subheader("Result")
+    st.markdown('<span class="gg-section">🏆 Result</span>', unsafe_allow_html=True)
 
     c1, c2 = st.columns([1, 2])
     with c1:
         st.markdown(
-            f'<div class="grade-badge" style="background:{color};">{grade}</div>',
+            f'<div class="grade-badge" style="background:{color}; --glow:{glow};">{grade}</div>',
             unsafe_allow_html=True,
         )
     with c2:
@@ -193,7 +321,7 @@ if submitted:
         prob_df = pd.DataFrame({"Grade": labels, "Probability (%)": (proba_all * 100).round(2)})
         prob_df = prob_df.set_index("Grade").reindex(sorted(labels))
 
-        st.subheader("📊 Prediction Confidence")
+        st.markdown('<span class="gg-section">📊 Prediction Confidence</span>', unsafe_allow_html=True)
         bar_colors = [GRADE_COLORS.get(g, "#3498db") for g in prob_df.index]
 
         fig, ax = plt.subplots(figsize=(6, 3.2))
