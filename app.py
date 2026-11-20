@@ -16,7 +16,7 @@ SVM_PATH = "svm_model.pkl"
 st.set_page_config(
     page_title="GradeGenius AI",
     page_icon="🎓",
-    layout="centered",
+    layout="wide",
 )
 
 BANNER_PATH = "banner.png"
@@ -33,6 +33,37 @@ GRADE_COLORS = {
 st.markdown(
     """
     <style>
+    /* ---------- bigger base font size, app-wide ---------- */
+    html, body, [class*="css"] {
+        font-size: 19px !important;
+    }
+    .stMarkdown p, .stMarkdown li, .stCaption, div[data-testid="stCaptionContainer"] {
+        font-size: 1.05rem !important;
+    }
+    label, .stSelectbox label, .stNumberInput label, .stRadio label {
+        font-size: 1.15rem !important;
+        font-weight: 600 !important;
+    }
+    div[data-baseweb="select"] * , input[type="number"] {
+        font-size: 1.1rem !important;
+    }
+    .stRadio div[role="radiogroup"] label p {
+        font-size: 1.15rem !important;
+    }
+    .stButton > button, .stFormSubmitButton > button {
+        font-size: 1.3rem !important;
+        padding: 0.8rem 1.6rem !important;
+    }
+    div[data-testid="stExpander"] summary {
+        font-size: 1.15rem !important;
+        font-weight: 600 !important;
+    }
+    /* widen the centered content block on wide layout so it doesn't look too stretched */
+    div[data-testid="stMainBlockContainer"] {
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+
     /* ---------- animated, multi-colour pastel background ---------- */
     [data-testid="stApp"],
     [data-testid="stMain"],
