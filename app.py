@@ -58,7 +58,8 @@ st.markdown(
 
     /* ---------- gradient animated title ---------- */
     .gg-title {
-        font-size: 44px;
+        font-size: clamp(40px, 7vw, 76px);
+        line-height: 1.15;
         font-weight: 900;
         text-align: center;
         margin-bottom: 0px;
@@ -75,16 +76,16 @@ st.markdown(
     }
     .gg-subtitle {
         text-align: center;
-        font-size: 20px;
-        font-weight: 600;
+        font-size: clamp(20px, 3.2vw, 32px);
+        font-weight: 700;
         color: #4b3f72;
-        margin-top: 4px;
+        margin-top: 6px;
     }
     .gg-tagline {
         text-align: center;
-        font-size: 15px;
+        font-size: clamp(14px, 1.6vw, 18px);
         color: #6b6b85;
-        margin-top: 2px;
+        margin-top: 6px;
         margin-bottom: 10px;
     }
 
