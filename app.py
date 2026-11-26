@@ -9,6 +9,8 @@ CNN_PATH = "cnn_model.h5"
 CNN_AVAILABLE = os.path.exists(CNN_PATH)
 KNN_PATH = "knn_model.pkl"
 SVM_PATH = "svm_model.pkl"
+AT_RISK_PATH = "at_risk_model.pkl"
+AT_RISK_AVAILABLE = os.path.exists(AT_RISK_PATH)
 
 # ------------------------------------------------------------------
 # Page setup
@@ -229,6 +231,11 @@ def load_cnn():
 
 rf_model, scaler, encoders, meta = load_files()
 
+
+@st.cache_resource
+def load_at_risk_model():
+    return joblib.load(AT_RISK_PATH)
+
 feature_columns = meta["feature_columns"]
 categorical = meta["categorical"]
 numeric = meta["numeric"]
@@ -379,6 +386,33 @@ if submitted:
         st.pyplot(fig)
 
         st.dataframe(prob_df, use_container_width=True)
+
+    # ------------------------------------------------------------------
+    # At-Risk Alert — separate binary model (D/F vs A/B/C), tuned for
+    # catching at-risk students early rather than naming the exact grade
+    # ------------------------------------------------------------------
+    if AT_RISK_AVAILABLE:
+        risk_model = load_at_risk_model()
+        risk_proba = risk_model.predict_proba(row_scaled)[0][1]  # P(at risk)
+        is_at_risk = risk_proba >= 0.5
+
+        st.markdown('<span class="gg-section">🚨 At-Risk Alert</span>', unsafe_allow_html=True)
+        if is_at_risk:
+            st.error(
+                f"⚠️ **At Risk** \u2014 this student has a **{risk_proba*100:.0f}%** estimated "
+                "chance of falling into D/F territory. Early support (tutoring, attendance "
+                "follow-up, study-habit coaching) is recommended now, before the final exam."
+            )
+        else:
+            st.success(
+                f"✅ **On Track** \u2014 estimated risk of falling into D/F is only "
+                f"**{risk_proba*100:.0f}%** based on current habits and history."
+            )
+        st.caption(
+            "This alert comes from a dedicated early-warning model trained specifically to "
+            "catch at-risk students (merging D and F grades), since the rare F grade alone "
+            "has too few examples (12 students) for reliable standalone detection."
+        )
 
 st.divider()
 
