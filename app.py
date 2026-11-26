@@ -11,6 +11,8 @@ KNN_PATH = "knn_model.pkl"
 SVM_PATH = "svm_model.pkl"
 AT_RISK_PATH = "at_risk_model.pkl"
 AT_RISK_AVAILABLE = os.path.exists(AT_RISK_PATH)
+SHAP_BG_PATH = "shap_background.pkl"
+SHAP_AVAILABLE = AT_RISK_AVAILABLE and os.path.exists(SHAP_BG_PATH)
 
 # ------------------------------------------------------------------
 # Page setup
@@ -236,6 +238,14 @@ rf_model, scaler, encoders, meta = load_files()
 def load_at_risk_model():
     return joblib.load(AT_RISK_PATH)
 
+
+@st.cache_resource
+def load_shap_explainer():
+    import shap
+    background = joblib.load(SHAP_BG_PATH)
+    risk_model = load_at_risk_model()
+    return shap.KernelExplainer(risk_model.predict_proba, background)
+
 feature_columns = meta["feature_columns"]
 categorical = meta["categorical"]
 numeric = meta["numeric"]
@@ -408,11 +418,52 @@ if submitted:
                 f"✅ **On Track** \u2014 estimated risk of falling into D/F is only "
                 f"**{risk_proba*100:.0f}%** based on current habits and history."
             )
-        st.caption(
-            "This alert comes from a dedicated early-warning model trained specifically to "
-            "catch at-risk students (merging D and F grades), since the rare F grade alone "
-            "has too few examples (12 students) for reliable standalone detection."
-        )
+        if SHAP_AVAILABLE:
+            with st.expander("🔍 Why this result? Click to see which factors mattered"):
+                st.markdown(
+                    "This alert comes from a dedicated early-warning model trained specifically "
+                    "to catch at-risk students (merging D and F grades together), since the rare "
+                    "F grade alone has too few examples (12 students) for reliable standalone "
+                    "detection. Below is the breakdown of **this specific student's** result: "
+                    "which of the 9 factors pushed the prediction toward *At Risk*, and which "
+                    "pushed it toward *On Track*."
+                )
+
+                explainer = load_shap_explainer()
+                shap_vals = explainer.shap_values(row_scaled, nsamples=100, silent=True)
+                # shap_vals shape: (1, n_features, 2 classes) -> take the "At Risk" class (index 1)
+                contributions = np.array(shap_vals)[0, :, 1]
+
+                feat_labels = [pretty(c) for c in feature_columns]
+                student_values = [str(inputs[c]) for c in feature_columns]
+                exp_df = pd.DataFrame({
+                    "Feature": feat_labels,
+                    "Student's Value": student_values,
+                    "Impact": contributions,
+                }).sort_values("Impact", key=lambda s: s.abs(), ascending=True)
+
+                bar_colors = ["#e74c3c" if v > 0 else "#2ecc71" for v in exp_df["Impact"]]
+                fig2, ax2 = plt.subplots(figsize=(6.5, 4.2))
+                ax2.barh(exp_df["Feature"], exp_df["Impact"], color=bar_colors)
+                ax2.axvline(0, color="#999", linewidth=0.8)
+                ax2.set_xlabel("\u2190 pushes toward On Track   |   pushes toward At Risk \u2192")
+                fig2.tight_layout()
+                st.pyplot(fig2)
+
+                display_df = exp_df.sort_values("Impact", key=lambda s: s.abs(), ascending=False).reset_index(drop=True)
+                display_df["Direction"] = np.where(display_df["Impact"] > 0, "\u26a0\ufe0f Toward At Risk", "\u2705 Toward On Track")
+                st.dataframe(
+                    display_df[["Feature", "Student's Value", "Direction"]],
+                    use_container_width=True, hide_index=True,
+                )
+
+                top = display_df.iloc[0]
+                top_feature = top["Feature"]
+                top_value = top["Student's Value"]
+                st.markdown(
+                    f"**Biggest factor:** *{top_feature}* (value: {top_value}) "
+                    f"was the strongest contributor to this result."
+                )
 
 st.divider()
 
