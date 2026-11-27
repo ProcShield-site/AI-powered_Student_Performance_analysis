@@ -46,7 +46,7 @@ class_names = np.array(meta["class_names"])
 # ------------------------------------------------------------
 # 2. Rebuild X, y EXACTLY the same way
 # ------------------------------------------------------------
-df = pd.read_csv("/content/student_performance_dataset_25000.csv")
+df = pd.read_csv("/content/student_performance_dataset.csv")
 df["parental_education"] = df["parental_education"].fillna("High School")
 
 cat_cols = ["gender", "parental_education", "internet_access",
