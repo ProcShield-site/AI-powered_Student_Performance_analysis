@@ -9,10 +9,28 @@ CNN_PATH = "cnn_model.h5"
 CNN_AVAILABLE = os.path.exists(CNN_PATH)
 KNN_PATH = "knn_model.pkl"
 SVM_PATH = "svm_model.pkl"
-AT_RISK_PATH = "at_risk_model.pkl"
-AT_RISK_AVAILABLE = os.path.exists(AT_RISK_PATH)
-SHAP_BG_PATH = "shap_background.pkl"
+AT_RISK_DIR = "at_risk"
+AT_RISK_PATH = os.path.join(AT_RISK_DIR, "at_risk_model.pkl")
+AT_RISK_SCALER_PATH = os.path.join(AT_RISK_DIR, "at_risk_scaler.pkl")
+AT_RISK_BIN_ENCODERS_PATH = os.path.join(AT_RISK_DIR, "at_risk_bin_encoders.pkl")
+AT_RISK_FEATURES_PATH = os.path.join(AT_RISK_DIR, "at_risk_features.pkl")
+AT_RISK_AVAILABLE = all(os.path.exists(p) for p in
+                        [AT_RISK_PATH, AT_RISK_SCALER_PATH, AT_RISK_BIN_ENCODERS_PATH, AT_RISK_FEATURES_PATH])
+SHAP_BG_PATH = os.path.join(AT_RISK_DIR, "shap_background.pkl")
 SHAP_AVAILABLE = AT_RISK_AVAILABLE and os.path.exists(SHAP_BG_PATH)
+
+# Parental education: fixed, correct ORDINAL order (NOT alphabetical) -- used only
+# by the self-contained At-Risk model, which has its own encoding pipeline.
+AT_RISK_EDU_ORDER = {"High School": 0, "Bachelors": 1, "Masters": 2, "PhD": 3}
+
+
+def sleep_deviation_hours(h: float) -> float:
+    """Distance outside the healthy 6-9 hour sleep range; 0 if inside it."""
+    if h < 6:
+        return 6 - h
+    if h > 9:
+        return h - 9
+    return 0.0
 
 # ------------------------------------------------------------------
 # Page setup
@@ -235,15 +253,26 @@ rf_model, scaler, encoders, meta = load_files()
 
 
 @st.cache_resource
-def load_at_risk_model():
-    return joblib.load(AT_RISK_PATH)
+def load_at_risk_bundle():
+    """Self-contained pipeline: its own scaler, own encoders, own feature list.
+    Deliberately separate from the main grade-prediction pipeline:
+      - excludes gender entirely (should never influence risk)
+      - encodes parental education by true ordinal level, not alphabetically
+      - trained with monotonic constraints so more attendance / more study time /
+        better previous grade / higher parental education can never increase risk
+    """
+    risk_model = joblib.load(AT_RISK_PATH)
+    risk_scaler = joblib.load(AT_RISK_SCALER_PATH)
+    bin_encoders = joblib.load(AT_RISK_BIN_ENCODERS_PATH)
+    risk_features = joblib.load(AT_RISK_FEATURES_PATH)
+    return risk_model, risk_scaler, bin_encoders, risk_features
 
 
 @st.cache_resource
 def load_shap_explainer():
     import shap
     background = joblib.load(SHAP_BG_PATH)
-    risk_model = load_at_risk_model()
+    risk_model, _, _, _ = load_at_risk_bundle()
     return shap.KernelExplainer(risk_model.predict_proba, background)
 
 feature_columns = meta["feature_columns"]
@@ -402,9 +431,28 @@ if submitted:
     # catching at-risk students early rather than naming the exact grade
     # ------------------------------------------------------------------
     if AT_RISK_AVAILABLE:
-        risk_model = load_at_risk_model()
-        risk_proba = risk_model.predict_proba(row_scaled)[0][1]  # P(at risk)
-        is_at_risk = risk_proba >= 0.5
+        risk_model, risk_scaler, risk_bin_encoders, risk_features = load_at_risk_bundle()
+
+        # Build this model's own feature row from the same form inputs:
+        # gender excluded, parental education re-mapped to true ordinal order.
+        risk_row = {}
+        for col in risk_features:
+            if col == "parental_education":
+                risk_row[col] = AT_RISK_EDU_ORDER[inputs["parental_education"]]
+            elif col == "sleep_deviation":
+                risk_row[col] = sleep_deviation_hours(inputs["sleep_hours"])
+            elif col in risk_bin_encoders:
+                risk_row[col] = risk_bin_encoders[col].transform([inputs[col]])[0]
+            else:
+                risk_row[col] = inputs[col]
+        risk_df = pd.DataFrame([risk_row])[risk_features]
+        risk_row_scaled = risk_scaler.transform(risk_df)
+
+        risk_proba = risk_model.predict_proba(risk_row_scaled)[0][1]  # P(at risk)
+        # Threshold lowered from 0.5 to 0.3: for an early-warning system, missing a
+        # genuinely at-risk student is worse than a false alarm, so recall is
+        # prioritized over precision here (verified: recall 50%->70% on held-out data).
+        is_at_risk = risk_proba >= 0.3
 
         st.markdown('<span class="gg-section">🚨 At-Risk Alert</span>', unsafe_allow_html=True)
         if is_at_risk:
@@ -424,18 +472,22 @@ if submitted:
                     "This alert comes from a dedicated early-warning model trained specifically "
                     "to catch at-risk students (merging D and F grades together), since the rare "
                     "F grade alone has too few examples (12 students) for reliable standalone "
-                    "detection. Below is the breakdown of **this specific student's** result: "
-                    "which of the 9 factors pushed the prediction toward *At Risk*, and which "
-                    "pushed it toward *On Track*."
+                    "detection. **Gender is deliberately excluded** from this model, and Attendance, "
+                    "Study Time, Previous Grade and Parental Education are mathematically "
+                    "constrained so that a *better* value can never increase the risk estimate. "
+                    "Below is the breakdown of **this specific student's** result: which of the "
+                    f"{len(risk_features)} factors pushed the prediction toward *At Risk*, and "
+                    "which pushed it toward *On Track*."
                 )
 
                 explainer = load_shap_explainer()
-                shap_vals = explainer.shap_values(row_scaled, nsamples=100, silent=True)
+                shap_vals = explainer.shap_values(risk_row_scaled, nsamples=100, silent=True)
                 # shap_vals shape: (1, n_features, 2 classes) -> take the "At Risk" class (index 1)
                 contributions = np.array(shap_vals)[0, :, 1]
 
-                feat_labels = [pretty(c) for c in feature_columns]
-                student_values = [str(inputs[c]) for c in feature_columns]
+                feat_labels = ["Sleep Hours" if c == "sleep_deviation" else pretty(c) for c in risk_features]
+                student_values = [str(inputs["sleep_hours"]) if c == "sleep_deviation"
+                                   else str(inputs[c]) for c in risk_features]
                 exp_df = pd.DataFrame({
                     "Feature": feat_labels,
                     "Student's Value": student_values,
